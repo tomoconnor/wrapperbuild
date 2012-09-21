@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+#This is a bit complicated.. It also relies on a few truths about your home directory.
+#For this project, there are 2 kinds of project we can build.  There's binaries, and there's wrappers.
+#Binaries are straight-off installation packages, drop something on the filesystem and you're done.
+#Wrappers contain settings, pre-launch environment variables, and .desktop files.
+
+####
+#These are some variables that you'll want to customise so that you get the correct metadata
+META_MAINT="YourCompany"
+META_URL="http://example.org/"
+META_ARCH="amd64" # this is the default architecture for the project build.  Change to i386 if you want
+
+
+EXPECTED_ARGS=3
+E_BADARGS=64
+
+if [ $# -ne $EXPECTED_ARGS ]; then
+	echo "Usage: `basename $0` <Project> <Vendor> <Version>"
+	echo "Example: `basename $0` mudbox-wrapper autodesk 2012.5"
+
+	exit $E_BADARGS
+fi
+
+BASE="-wrapper"
+PROJECT=${1,,} # the ,, operator lowercases the contents of $1 and so on
+VENDOR=${2,,}
+VERSION=${3,,}
+if [[ $PROJECT == *wrapper* ]]; then # If the projectname contains "wrapper", it's a wrapper, which we treat slightly differently.. 
+	APP_NAME=${PROJECT:0:$((${#PROJECT} - ${#BASE}))}  ## First of many dirty bits of bash.
+	#The bit of the above inside the $(()) evaluates the substring index of where '-wrapper' starts, and then the :0: bit trims it back so that $APP_NAME contains the name without -wrapper
+fi
+
+if [ ! -d ~/Projects ]; then
+	mkdir ~/Projects # all stuff will end up in ~/Projects/APPLICATIONS/ProjectName
+fi
+
+if [ ! -d ~/Projects/APPLICATIONS ]; then
+	mkdir ~/Projects/APPLICATIONS
+fi
+
+
+if [ ! -d ~/Projects/APPLICATIONS/${PROJECT} ]; then
+	echo "Making Project Directory"
+	mkdir ~/Projects/APPLICATIONS/${PROJECT}
+fi
+
+if [ ! -d ~/Projects/APPLICATIONS/${PROJECT}/info ]; then
+	echo "Making Project Metadata directory"
+	mkdir ~/Projects/APPLICATIONS/${PROJECT}/info
+	echo ${PROJECT}${VERSION} > ~/Projects/APPLICATIONS/${PROJECT}/info/NAME
+	echo "${PROJECT^}" > ~/Projects/APPLICATIONS/${PROJECT}/info/DESCRIPTION
+	echo "$META_URL" > ~/Projects/APPLICATIONS/${PROJECT}/info/URL
+	echo "${VERSION}" > ~/Projects/APPLICATIONS/${PROJECT}/info/VERSION
+	echo "1" > ~/Projects/APPLICATIONS/${PROJECT}/info/BUILD_VERSION
+	echo "$META_MAINT" >  ~/Projects/APPLICATIONS/${PROJECT}/info/MAINTAINER
+	# This inserts the basic info into the project's metadata directory
+
+	if [[ $PROJECT == *wrapper* ]]; then
+		echo "all" >  ~/Projects/APPLICATIONS/${PROJECT}/info/ARCH #Wrapper packages don't need an architecture, so it's 'all'
+		echo ${PROJECT} > ~/Projects/APPLICATIONS/${PROJECT}/info/NAME
+	else
+		echo "$META_ARCH" >  ~/Projects/APPLICATIONS/${PROJECT}/info/ARCH
+	fi
+
+	mkdir ~/Projects/APPLICATIONS/${PROJECT}/info/bin
+
+	cp /usr/local/bin/build-deb ~/Projects/APPLICATIONS/${PROJECT}/info/bin/build-deb #Copy the master build-deb into the info/bin/build-deb
+	chmod +x ~/Projects/APPLICATIONS/${PROJECT}/info/bin/build-deb
+	cp /usr/local/bin/publish-deb ~/Projects/APPLICATIONS/${PROJECT}/info/bin/publish-deb
+	chmod +x ~/Projects/APPLICATIONS/${PROJECT}/info/bin/publish-deb
+fi
+
+if [ ! -d "~/Projects/APPLICATIONS/${PROJECT}/src" ];  then
+	mkdir ~/Projects/APPLICATIONS/${PROJECT}/src
+	if [[ $PROJECT == *wrapper* ]]; then
+		mkdir -p ~/Projects/APPLICATIONS/${PROJECT}/src/usr/local/bin
+		mkdir -p ~/Projects/APPLICATIONS/${PROJECT}/src/usr/share/applications
+		mkdir -p ~/Projects/APPLICATIONS/${PROJECT}/src/usr/share/pixmaps
+		mkdir -p ~/Projects/APPLICATIONS/${PROJECT}/src/opt/.config/${META_MAINT}/${VENDOR}/${APP_NAME}/${VERSION}
+		touch ~/Projects/APPLICATIONS/${PROJECT}/src/opt/.config/${META_MAINT}/${VENDOR}/${APP_NAME}/${VERSION}/environment
+		cat > ~/Projects/APPLICATIONS/${PROJECT}/src/usr/local/bin/${APP_NAME,,} <<EOM
+#!/usr/bin/env bash
+# Wrapper Script - Edit to your liking
+vendor="${VENDOR,,}"
+application="${APP_NAME,,}"
+
+
+EOM
+		chmod +x ~/Projects/APPLICATIONS/${PROJECT}/src/usr/local/bin/${APP_NAME,,}
+
+	fi
+fi
+
+if [ ! -d "~/Projects/APPLICATIONS/${PROJECT}/IMPORT" ]; then
+	mkdir ~/Projects/APPLICATIONS/${PROJECT}/IMPORT
+fi
+
+
+
